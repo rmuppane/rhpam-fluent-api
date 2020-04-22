@@ -27,12 +27,12 @@
       <scope>test</scope>
     </dependency>
     <dependency>
-      <groupId>org.jbpm</groupId>
-      <artifactId>jbpm-flow</artifactId>
+      <groupId>org.kie</groupId>
+      <artifactId>kie-api</artifactId>
     </dependency>
     <dependency>
       <groupId>org.jbpm</groupId>
-      <artifactId>jbpm-flow-builder</artifactId>
+      <artifactId>jbpm-test</artifactId>
     </dependency>
   </dependencies>
   <dependencyManagement>
