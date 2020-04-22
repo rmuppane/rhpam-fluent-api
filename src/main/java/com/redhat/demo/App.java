@@ -1,11 +1,22 @@
 package com.redhat.demo;
 
-import org.jbpm.bpmn2.xml.XmlBPMNProcessDumper;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
+
+import javax.persistence.EntityManagerFactory;
+import javax.persistence.Persistence;
+
+import org.drools.compiler.compiler.ProcessBuilderFactory;
+import org.drools.core.impl.InternalKnowledgeBase;
+import org.drools.core.impl.KnowledgeBaseFactory;
+import org.jbpm.compiler.ProcessBuilderImpl;
 import org.jbpm.ruleflow.core.RuleFlowProcess;
 import org.jbpm.ruleflow.core.RuleFlowProcessFactory;
 import org.jbpm.workflow.core.node.Split;
 import org.kie.api.KieBase;
-import org.kie.api.io.ResourceType;
+import org.kie.api.definition.KiePackage;
 import org.kie.api.runtime.KieSession;
 import org.kie.api.runtime.manager.RuntimeEnvironment;
 import org.kie.api.runtime.manager.RuntimeEnvironmentBuilder;
@@ -13,11 +24,11 @@ import org.kie.api.runtime.manager.RuntimeManager;
 import org.kie.api.runtime.manager.RuntimeManagerFactory;
 import org.kie.internal.builder.KnowledgeBuilder;
 import org.kie.internal.builder.KnowledgeBuilderFactory;
-import org.kie.internal.io.ResourceFactory;
 import org.kie.internal.runtime.conf.AuditMode;
 import org.kie.internal.runtime.conf.DeploymentDescriptor;
 import org.kie.internal.runtime.manager.context.EmptyContext;
 import org.kie.internal.runtime.manager.deploy.DeploymentDescriptorManager;
+import org.kie.test.util.db.PersistenceUtil;
 
 /**
  * Hello world! Simple stateless process
@@ -29,38 +40,69 @@ public class App {
 
         KieBase kbase = getKieBase(processDef);
 
-        KieSession ksession = getKieSession(kbase);
+        KieSession ksession = getKieSession(kbase, true);
 
         ksession.startProcess("hello");
 
         ksession.dispose();
     }
 
-    private static KieSession getKieSession(KieBase kbase) {
+    private static KieSession getKieSession(KieBase kbase, boolean persistence) {
         DeploymentDescriptor descriptor = new DeploymentDescriptorManager().getDefaultDescriptor().getBuilder()
                 .auditMode(AuditMode.NONE).get();
 
-        RuntimeEnvironmentBuilder runtimeBuilder = RuntimeEnvironmentBuilder.Factory.get().newDefaultInMemoryBuilder();
-        RuntimeEnvironment env = runtimeBuilder.persistence(false)
-                                               .addEnvironmentEntry("KieDeploymentDescriptor", descriptor)
-                                               .knowledgeBase(kbase)
-                                               .get();
+        RuntimeEnvironmentBuilder runtimeBuilder;
+        RuntimeEnvironment env;
 
-        RuntimeManager manager = RuntimeManagerFactory.Factory.get().newSingletonRuntimeManager(env, "1.0");
+        RuntimeManager manager = null;
 
-        KieSession ksession = manager.getRuntimeEngine(EmptyContext.get()).getKieSession();
-        return ksession;
+        if (persistence) {
+            Properties properties = new Properties();
+            properties.put("driverClassName", "org.h2.Driver");
+            properties.put("className", "org.h2.jdbcx.JdbcDataSource");
+            properties.put("user", "sa");
+            properties.put("password", "sa");
+            properties.put("url", "jdbc:h2:mem:test");
+            properties.put("datasourceName", "jdbc/jbpm-ds");
+            PersistenceUtil.setupPoolingDataSource(properties);
+            Map<String, String> map = new HashMap<String, String>();
+            map.put("hibernate.dialect", "org.hibernate.dialect.H2Dialect");
+            EntityManagerFactory emf = Persistence.createEntityManagerFactory("org.jbpm.persistence.jpa");                            
+
+            runtimeBuilder = RuntimeEnvironmentBuilder.Factory.get().newDefaultBuilder();
+            env = runtimeBuilder.persistence(persistence)
+                                .addEnvironmentEntry("KieDeploymentDescriptor", descriptor)
+                                .entityManagerFactory(emf)
+                                .knowledgeBase(kbase)
+                                .get();
+
+            manager = RuntimeManagerFactory.Factory.get().newPerProcessInstanceRuntimeManager(env, "1.0");
+
+        } else {
+            runtimeBuilder = RuntimeEnvironmentBuilder.Factory.get().newDefaultInMemoryBuilder();
+            env = runtimeBuilder.persistence(persistence)
+                                .addEnvironmentEntry("KieDeploymentDescriptor", descriptor)
+                                .knowledgeBase(kbase)
+                                .get();
+
+            manager = RuntimeManagerFactory.Factory.get().newSingletonRuntimeManager(env, "1.0");
+        }
+
+        return manager.getRuntimeEngine(EmptyContext.get()).getKieSession();
     }
 
     private static KieBase getKieBase(RuleFlowProcess processDef) {
         KnowledgeBuilder kbuilder = KnowledgeBuilderFactory.newKnowledgeBuilder();
-        // ProcessBuilderImpl pbuilder = (ProcessBuilderImpl) ProcessBuilderFactory.newProcessBuilder(kbuilder);
-        // pbuilder.buildProcess(processDef, null);
 
-        byte[] processBytes = XmlBPMNProcessDumper.INSTANCE.dump(processDef).getBytes();
-        kbuilder.add(ResourceFactory.newByteArrayResource(processBytes), ResourceType.BPMN2);
+        ProcessBuilderImpl pbuilder = (ProcessBuilderImpl) ProcessBuilderFactory.newProcessBuilder(kbuilder);
+        pbuilder.buildProcess(processDef, null);
+
+        InternalKnowledgeBase kbase = KnowledgeBaseFactory.newKnowledgeBase();
+        Collection<KiePackage> knowledgePackages = kbuilder.getKnowledgePackages();
         
-        return kbuilder.newKieBase();
+        kbase.addPackages(knowledgePackages);
+        
+        return kbase;
     }
 
     private static RuleFlowProcess getProcessDefinition() {
