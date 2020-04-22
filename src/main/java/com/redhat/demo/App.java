@@ -40,11 +40,15 @@ public class App {
 
         KieBase kbase = getKieBase(processDef);
 
-        KieSession ksession = getKieSession(kbase, true);
+        // configure persistence
+        KieSession ksession = getKieSession(kbase, false);
 
         ksession.startProcess("hello");
 
         ksession.dispose();
+
+        // when persistence is on, it closes the runtime
+        System.exit(0);
     }
 
     private static KieSession getKieSession(KieBase kbase, boolean persistence) {
