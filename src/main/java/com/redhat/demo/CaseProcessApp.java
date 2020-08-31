@@ -47,6 +47,8 @@ public class CaseProcessApp {
         ProcessInstance pi = ksession.startProcess("datavalidation");
         System.out.println("Process Instance Id      ... " + pi.getId());
         
+        // Question is does it really creating case? 
+        
         
         // Resource res = ResourceFactory.newByteArrayResource(XmlBPMNProcessDumper.INSTANCE.dump(process).getBytes());
         // res.setSourcePath("process.bpmn2"); // source path or target path must be set to be added into kbase
