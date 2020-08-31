@@ -12,9 +12,9 @@ import org.drools.compiler.compiler.ProcessBuilderFactory;
 import org.drools.core.impl.InternalKnowledgeBase;
 import org.drools.core.impl.KnowledgeBaseFactory;
 import org.jbpm.compiler.ProcessBuilderImpl;
+import org.jbpm.process.core.datatype.impl.type.StringDataType;
 import org.jbpm.ruleflow.core.RuleFlowProcess;
 import org.jbpm.ruleflow.core.RuleFlowProcessFactory;
-import org.jbpm.workflow.core.node.Split;
 import org.kie.api.KieBase;
 import org.kie.api.definition.KiePackage;
 import org.kie.api.runtime.KieSession;
@@ -22,6 +22,7 @@ import org.kie.api.runtime.manager.RuntimeEnvironment;
 import org.kie.api.runtime.manager.RuntimeEnvironmentBuilder;
 import org.kie.api.runtime.manager.RuntimeManager;
 import org.kie.api.runtime.manager.RuntimeManagerFactory;
+import org.kie.api.runtime.process.ProcessInstance;
 import org.kie.internal.builder.KnowledgeBuilder;
 import org.kie.internal.builder.KnowledgeBuilderFactory;
 import org.kie.internal.runtime.conf.AuditMode;
@@ -30,7 +31,10 @@ import org.kie.internal.runtime.manager.context.CaseContext;
 import org.kie.internal.runtime.manager.deploy.DeploymentDescriptorManager;
 import org.kie.test.util.db.PersistenceUtil;
 
-public class Case {
+/**
+ * Hello world! Simple stateless process
+ */
+public class CaseProcessApp {
     public static void main(String[] args) {
 
         RuleFlowProcess processDef = getProcessDefinition();
@@ -40,7 +44,12 @@ public class Case {
         // configure persistence
         KieSession ksession = getKieSession(kbase, true);
 
-        ksession.startProcess("hello");
+        ProcessInstance pi = ksession.startProcess("datavalidation");
+        System.out.println("Process Instance Id      ... " + pi.getId());
+        
+        
+        // Resource res = ResourceFactory.newByteArrayResource(XmlBPMNProcessDumper.INSTANCE.dump(process).getBytes());
+        // res.setSourcePath("process.bpmn2"); // source path or target path must be set to be added into kbase
 
         ksession.dispose();
 
@@ -77,6 +86,7 @@ public class Case {
                                 .knowledgeBase(kbase)
                                 .get();
 
+            // manager = RuntimeManagerFactory.Factory.get().newPerProcessInstanceRuntimeManager(env, "1.0");
             manager = RuntimeManagerFactory.Factory.get().newPerCaseRuntimeManager(env, "1.0");
 
         } else {
@@ -86,6 +96,7 @@ public class Case {
                                 .knowledgeBase(kbase)
                                 .get();
 
+            // manager = RuntimeManagerFactory.Factory.get().newSingletonRuntimeManager(env, "1.0");
             manager = RuntimeManagerFactory.Factory.get().newPerCaseRuntimeManager(env, "1.0");
         }
 
@@ -106,47 +117,45 @@ public class Case {
         return kbase;
     }
 
+    // This will cover the two stages
     private static RuleFlowProcess getProcessDefinition() {
-        RuleFlowProcessFactory factory = RuleFlowProcessFactory.createProcess("hello");
+        RuleFlowProcessFactory factory = RuleFlowProcessFactory.createProcess("datavalidation");
         factory
                // header
-               .name("hello process").packageName("com.redhat.demo")
+               .name("data validation process").packageName("com.redhat.demo")
+               .variable("caseId", new StringDataType(), "caseIdPrefix", "DV-")
+               .variable("firstName", new StringDataType())
+               .variable("lastName", new StringDataType())
+               .variable("dataentry", new StringDataType())
                // nodes
                .startNode(1).name("Start").done()
-               .splitNode(10).name("xor").type(Split.TYPE_XOR)
-               .constraint(2, "cos1", "code", "mvel", "true")
-               .constraint(4, "cos2", "code", "mvel", "false").done()
-               .actionNode(2).name("Action").action("java", "System.out.println(\"Hello World\");").done()
-               .endNode(3).name("End").done()
-               .endNode(4).name("End 2").done()
+               .milestoneNode(2).name("DataEntry").constraint("org.kie.api.runtime.process.CaseData(data.get(\"dataentry\") != null && data.get(\"dataentry\").equals(\"completed\"))").done()
+               .compositeNode(3)
+	               .name("Data entry")
+	               .startNode(1).name("User Data entry Start").done()
+	               .actionNode(2).name("Script task").action("java",
+                                                               "System.out.println(\"Stage 1\");").done()
+	               .endNode(3).name("Data entry stage End").terminate(true).done()
+	               .connection(1, 2)
+	               .connection(2, 3)
+	               .done()
+	           .compositeNode(4)
+	               .name("Data Approval")
+	               .startNode(1).name("User Data approval").done()
+	               .actionNode(2).name("Script task").action("java",
+                                                               "System.out.println(\"Stage 2\");").done()
+	               .endNode(3).name("Data Approval Stage End").terminate(true).done()
+	               .connection(1, 2)
+	               .connection(2, 3)
+	               .done()
+               .endNode(5).name("End").done()
                // connections
-               .connection(1, 10)
-               .connection(10, 4)
-               .connection(10, 2)
-               .connection(2, 3);
-
+               .connection(1, 2)
+               .connection(2, 3)
+               .connection(3, 4)
+               .connection(4, 5);
+        
+        System.out.println("Validation " + factory.validate()) ;
         return factory.getProcess();
     }
-    
-    private static RuleFlowProcess getProcessDefinition() {
-        RuleFlowProcessFactory factory = RuleFlowProcessFactory.createProcess("hello");
-        factory
-               // header
-               .name("hello process").packageName("com.redhat.demo")
-               // nodes
-               .startNode(1).name("Start").done()
-               .splitNode(10).name("xor").type(Split.TYPE_XOR)
-               .constraint(2, "cos1", "code", "mvel", "true")
-               .constraint(4, "cos2", "code", "mvel", "false").done()
-               .actionNode(2).name("Action").action("java", "System.out.println(\"Hello World\");").done()
-               .endNode(3).name("End").done()
-               .endNode(4).name("End 2").done()
-               // connections
-               .connection(1, 10)
-               .connection(10, 4)
-               .connection(10, 2)
-               .connection(2, 3);
-
-        return factory.getProcess();
-    } 
 }

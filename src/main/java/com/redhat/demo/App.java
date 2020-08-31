@@ -22,6 +22,7 @@ import org.kie.api.runtime.manager.RuntimeEnvironment;
 import org.kie.api.runtime.manager.RuntimeEnvironmentBuilder;
 import org.kie.api.runtime.manager.RuntimeManager;
 import org.kie.api.runtime.manager.RuntimeManagerFactory;
+import org.kie.api.runtime.process.ProcessInstance;
 import org.kie.internal.builder.KnowledgeBuilder;
 import org.kie.internal.builder.KnowledgeBuilderFactory;
 import org.kie.internal.runtime.conf.AuditMode;
@@ -43,7 +44,8 @@ public class App {
         // configure persistence
         KieSession ksession = getKieSession(kbase, false);
 
-        ksession.startProcess("hello");
+        ProcessInstance pi = ksession.startProcess("hello");
+        System.out.println("Process Instance Id      ... " + pi.getId());
 
         ksession.dispose();
 
